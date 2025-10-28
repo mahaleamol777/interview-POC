@@ -46,17 +46,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
   managed = true
   }
 
-  }
 
-  network_profile {
-    network_plugin = "azure"
-    load_balancer_sku = "standard"
-  }
-
-  tags = {
-    environment = "dev"
-    created_by  = "terraform"
-  }
 }
 
 # Allow AKS to pull from ACR by assigning AcrPull to AKS managed identity
