@@ -5,7 +5,7 @@ trigger:
 
 variables:
   TF_WORKING_DIR: terraform
-  ACR_NAME: '<replace-with-acr-name-or-terraform-output>'
+  ACR_NAME: 'demoacr'
   ACR_IMAGE: 'demo-microservice'
   ACR_TAG: '$(Build.BuildId)'
 
