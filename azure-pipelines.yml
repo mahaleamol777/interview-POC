@@ -37,12 +37,8 @@ stages:
   displayName: 'Terraform - plan & apply'
   dependsOn: Terraform_Scan
   jobs:
-  - deployment: tf_apply
     pool:
       vmImage: 'ubuntu-latest'
-    strategy:
-      runOnce:
-        deploy:
           steps:
           - checkout: self
           - task: AzureCLI@2
