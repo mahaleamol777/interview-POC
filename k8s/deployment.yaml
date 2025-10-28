@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: interviewacr/demo-microservice:latest
+          image: demoacr/demo-microservice:latest
           ports:
             - containerPort: 3000
           livenessProbe:
