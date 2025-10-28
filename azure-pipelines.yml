@@ -1,1 +1,139 @@
+trigger:
+  branches:
+    include:
+      - main
+
+variables:
+  TF_WORKING_DIR: terraform
+  ACR_NAME: '<replace-with-acr-name-or-terraform-output>'
+  ACR_IMAGE: 'demo-microservice'
+  ACR_TAG: '$(Build.BuildId)'
+
+stages:
+- stage: Terraform_Scan
+  displayName: 'Terraform - fmt, init, validate & Checkov'
+  jobs:
+  - job: tf_scan
+    displayName: 'Validate & Scan Terraform'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - checkout: self
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.x'
+    - script: |
+        python -m pip install --upgrade pip
+        pip install checkov terraform-docs
+        cd $(TF_WORKING_DIR)
+        terraform init -input=false
+        terraform fmt -check
+        terraform validate || true
+        checkov -d . || exit 0
+      displayName: 'Run terraform init/validate and Checkov (scan)'
+    # Note: We don't apply in this stage.
+
+- stage: Terraform_Apply
+  displayName: 'Terraform - plan & apply'
+  dependsOn: Terraform_Scan
+  jobs:
+  - deployment: tf_apply
+    environment: 'terraform'
+    pool:
+      vmImage: 'ubuntu-latest'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'AzureServiceConnection'   # <-- create this service connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+                cd $(TF_WORKING_DIR)
+                terraform init -input=false
+                terraform plan -out=tfplan -input=false
+                terraform apply -auto-approve tfplan
+            displayName: 'Azure CLI - terraform apply'
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: '$(TF_WORKING_DIR)/terraform.tfstate'
+              artifact: 'tfstate'
+
+- stage: Build_Push
+  displayName: 'Build image and push to ACR'
+  dependsOn: Terraform_Apply
+  jobs:
+  - job: build
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - checkout: self
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'AzureServiceConnection'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          # Get ACR login server from terraform output
+          ACR=$(az acr show -n <replace-acr-name> --query "loginServer" -o tsv)
+          echo "ACR: $ACR"
+          docker build -t $ACR/$(ACR_IMAGE):$(ACR_TAG) ./app
+          az acr login -n <replace-acr-name>
+          docker push $ACR/$(ACR_IMAGE):$(ACR_TAG)
+      displayName: 'Build and push image to ACR'
+
+- stage: Deploy_To_AKS
+  displayName: 'Deploy to AKS'
+  dependsOn: Build_Push
+  jobs:
+  - job: deploy
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - checkout: self
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'AzureServiceConnection'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          # Get AKS credentials
+          az aks get-credentials -n <replace-aks-name> -g <replace-rg> --overwrite-existing
+          # update image in k8s manifest and apply
+          ACR=$(az acr show -n <replace-acr-name> --query "loginServer" -o tsv)
+          sed -i "s|<ACR_LOGIN_SERVER>|${ACR}|g" k8s/deployment.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/hpa.yaml
+      displayName: 'kubectl apply manifests'
+
+- stage: Install_Monitoring
+  displayName: 'Install Prometheus & Grafana via Helm'
+  dependsOn: Deploy_To_AKS
+  jobs:
+  - job: monitoring
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'AzureServiceConnection'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          az aks get-credentials -n <replace-aks-name> -g <replace-rg> --overwrite-existing
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo update
+          helm upgrade --install monitoring prometheus-community/kube-prometheus-stack --namespace monitoring --create-namespace \
+            --set grafana.adminUser=admin \
+            --set grafana.adminPassword="$(GRAFANA_ADMIN_PASSWORD)"
+      displayName: 'Install kube-prometheus-stack'
 
