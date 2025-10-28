@@ -10,7 +10,7 @@ variable "location" {
 
 variable "resource_group_name" {
   type    = string
-  default = "${var.prefix}-rg"
+  default = "demo-rg"
 }
 
 variable "aks_node_count" {
@@ -25,7 +25,7 @@ variable "aks_node_size" {
 
 variable "acr_name" {
   type    = string
-  default = "${var.prefix}acr"
+  default = "demoacr"
 }
 
 # Optional: storage account for tfstate backend (if you decide to use remote backend)
