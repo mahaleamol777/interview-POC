@@ -40,6 +40,10 @@ stages:
   - job: tf_apply
     steps:
       - checkout: self
+      - task: TerraformInstaller@1
+        inputs:
+          terraformVersion: 'latest'
+        
       - task: AzureCLI@2
         inputs:
          azureSubscription: 'AzureServiceConnection'   # <-- create this service connection
