@@ -37,15 +37,13 @@ stages:
   displayName: 'Terraform - plan & apply'
   dependsOn: Terraform_Scan
   jobs:
-    pool:
-      vmImage: 'ubuntu-latest'
-          steps:
-          - checkout: self
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'AzureServiceConnection'   # <-- create this service connection
-              scriptType: bash
-              scriptLocation: inlineScript
+    steps:
+      - checkout: self
+      - task: AzureCLI@2
+        inputs:
+        azureSubscription: 'AzureServiceConnection'   # <-- create this service connection
+        scriptType: bash
+       scriptLocation: inlineScript
               inlineScript: |
                 set -e
                 cd $(TF_WORKING_DIR)
@@ -53,10 +51,10 @@ stages:
                 terraform plan -out=tfplan -input=false
                 terraform apply -auto-approve tfplan
             displayName: 'Azure CLI - terraform apply'
-          - task: PublishPipelineArtifact@1
-            inputs:
-              targetPath: '$(TF_WORKING_DIR)/terraform.tfstate'
-              artifact: 'tfstate'
+      - task: PublishPipelineArtifact@1
+        inputs:
+        targetPath: '$(TF_WORKING_DIR)/terraform.tfstate'
+        artifact: 'tfstate'
 
 - stage: Build_Push
   displayName: 'Build image and push to ACR'
