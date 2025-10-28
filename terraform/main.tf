@@ -42,8 +42,10 @@ resource "azurerm_kubernetes_cluster" "aks" {
     type = "SystemAssigned"
   }
 
-  role_based_access_control {
-    enabled = true
+  azure_active_directory_role_based_access_control {
+  managed = true
+  }
+
   }
 
   network_profile {
